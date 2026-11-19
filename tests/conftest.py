@@ -13,6 +13,10 @@ from app.core.database import crear_engine, crear_tablas
 from app.domain.interfaces.consulta_direcciones import IConsultaDirecciones
 from app.repositories.ubicacion_repository import UbicacionRepository
 from app.services.ubicacion_service import UbicacionService
+from app.api.routers import tipo_documento_router
+from app.domain.interfaces.consulta_uso_tipo_documento import IConsultaUsoTipoDocumento
+from app.repositories.tipo_documento_repository import TipoDocumentoRepository
+from app.services.tipo_documento_service import TipoDocumentoService
 from main import app
 
 URL = "/api/v1/parametrizacion/ubicaciones"
@@ -28,6 +32,18 @@ class DireccionesSimuladas(IConsultaDirecciones):
 
     def tiene_direcciones_activas(self, ubicacion_id: int) -> bool:
         return ubicacion_id in self.ubicaciones_con_direcciones
+
+
+class UsoTipoDocumentoSimulado(IConsultaUsoTipoDocumento):
+    """Reemplaza la consulta real hasta que existan compradores y vendedores."""
+
+    def __init__(self):
+        self.tipos_en_uso: set[int] = set()
+
+    def tiene_compradores_o_vendedores_activos(
+        self, tipo_documento_id: int
+    ) -> bool:
+        return tipo_documento_id in self.tipos_en_uso
 
 
 @pytest.fixture
@@ -47,6 +63,37 @@ def direcciones():
 @pytest.fixture
 def client(repo, direcciones, monkeypatch):
     monkeypatch.setattr(ubicacion_router, "service", UbicacionService(repo, direcciones))
+    return TestClient(app)
+
+
+@pytest.fixture
+def repo_tipo_documento():
+    motor = crear_engine("sqlite:///:memory:")
+    crear_tablas(motor)
+    yield TipoDocumentoRepository(
+        sessionmaker(bind=motor, expire_on_commit=False)
+    )
+    motor.dispose()
+
+
+@pytest.fixture
+def uso_tipo_documento():
+    return UsoTipoDocumentoSimulado()
+
+
+@pytest.fixture
+def servicio_tipo_documento(repo_tipo_documento, uso_tipo_documento):
+    return TipoDocumentoService(repo_tipo_documento, uso_tipo_documento)
+
+
+@pytest.fixture
+def client_tipo_documento(
+    repo_tipo_documento,
+    uso_tipo_documento,
+    monkeypatch,
+):
+    servicio = TipoDocumentoService(repo_tipo_documento, uso_tipo_documento)
+    monkeypatch.setattr(tipo_documento_router, "service", servicio)
     return TestClient(app)
 
 

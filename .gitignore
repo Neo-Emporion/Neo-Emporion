@@ -1,14 +1,9 @@
 .env
 __pycache__/
 venv/
-# Documentación de apoyo local: el profesor pidió no subirla a GitHub
-HU-*.md
 guia-fastapi-arquitectura-capas.md
 CLAUDE.md
-
-# Pruebas
-.pytest_cache/
-*.db
-# Apoyo local para el equipo (no se sube)
-.github/copilot-instructions.md
-GUIA_COMPANERO.md
+HU-02_Gestionar_tipos_de_documento.md
+cluade.md
+     copilot-instructions.md
+     README.md

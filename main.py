@@ -11,6 +11,7 @@ from fastapi.openapi.utils import get_openapi
 from app.api.errores import registrar_manejadores
 from app.api.schemas.respuesta import exito
 from app.api.routers.ubicacion_router import router as ubicacion_router
+from app.api.routers.tipo_documento_router import router as tipo_documento_router
 from app.api.routers.valor_router import router as valor_router
 from app.core.config import APP_ENV, APP_NAME
 from app.core.database import crear_tablas
@@ -35,6 +36,8 @@ registrar_manejadores(app)
 
 # MOD-01 Parametrización — HU-01 Catálogo geográfico
 app.include_router(ubicacion_router, prefix="/api/v1")
+# MOD-01 Parametrización — HU-02 Tipos de documento
+app.include_router(tipo_documento_router, prefix="/api/v1")
 # MOD-01 Parametrización — HU-03 Catálogos transaccionales
 app.include_router(valor_router, prefix="/api/v1")
 

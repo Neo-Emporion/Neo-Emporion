@@ -12,3 +12,5 @@ CLAUDE.md
 # Apoyo local para el equipo (no se sube)
 .github/copilot-instructions.md
 GUIA_COMPANERO.md
+# Archivos de bloqueo de ONLYOFFICE / LibreOffice
+.~lock.*#

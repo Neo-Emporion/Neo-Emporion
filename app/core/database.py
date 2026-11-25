@@ -40,4 +40,5 @@ def crear_tablas(motor: Engine = engine) -> None:
     # Importar los modelos ORM para que queden registrados en Base.metadata
     import app.repositories.ubicacion_repository  # noqa: F401
     import app.repositories.tipo_documento_repository  # noqa: F401
+    import app.repositories.valor_repository  # noqa: F401
     Base.metadata.create_all(bind=motor)

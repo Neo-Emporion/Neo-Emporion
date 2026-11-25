@@ -111,3 +111,48 @@ def colombia_santander(client):
     pais = crear(client, "PAIS", "Colombia", "CO").json()["data"]["id"]
     depto = crear(client, "DEPARTAMENTO", "Santander", "68", pais).json()["data"]["id"]
     return pais, depto
+
+
+# ── HU-03 Catálogos transaccionales ───────────────────────────
+from app.api.routers import valor_router  # noqa: E402
+from app.domain.interfaces.consulta_uso_valores import IConsultaUsoValores  # noqa: E402
+from app.repositories.valor_repository import ValorRepository  # noqa: E402
+from app.services.valor_service import ValorService  # noqa: E402
+
+URL_VALORES = "/api/v1/parametrizacion/valores"
+
+
+class UsoValoresSimulado(IConsultaUsoValores):
+    """Reemplaza la consulta real de uso (los módulos consumidores aún no existen)."""
+
+    def __init__(self):
+        self.valores_en_uso: set[int] = set()
+
+    def esta_en_uso(self, valor_id: int) -> bool:
+        return valor_id in self.valores_en_uso
+
+
+@pytest.fixture
+def repo_valores():
+    """Repositorio de valores sobre una base SQLite en memoria nueva para cada prueba."""
+    motor = crear_engine("sqlite:///:memory:")
+    crear_tablas(motor)
+    yield ValorRepository(sessionmaker(bind=motor, expire_on_commit=False))
+    motor.dispose()
+
+
+@pytest.fixture
+def uso_valores():
+    return UsoValoresSimulado()
+
+
+@pytest.fixture
+def client_valores(repo_valores, uso_valores, monkeypatch):
+    monkeypatch.setattr(valor_router, "service", ValorService(repo_valores, uso_valores))
+    return TestClient(app)
+
+
+def crear_valor(client, categoria, codigo, nombre):
+    """Registra un valor paramétrico como administrador y devuelve la respuesta."""
+    return client.post(URL_VALORES, json={"categoria": categoria, "codigo": codigo,
+                                          "nombre": nombre}, headers=ADMIN)

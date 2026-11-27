@@ -14,6 +14,7 @@ from app.api.routers.ubicacion_router import router as ubicacion_router
 from app.api.routers.tipo_documento_router import router as tipo_documento_router
 from app.api.routers.valor_router import router as valor_router
 from app.api.routers.formato_router import router as formato_router
+from app.api.routers.comprador_router import router as comprador_router
 from app.core.config import APP_ENV, APP_NAME
 from app.core.database import crear_tablas
 
@@ -43,6 +44,8 @@ app.include_router(tipo_documento_router, prefix="/api/v1")
 app.include_router(valor_router, prefix="/api/v1")
 # MOD-01 Parametrización — HU-05 Formato de validación de tipo de documento
 app.include_router(formato_router, prefix="/api/v1")
+# MOD-02 Usuarios y Compradores — HU-07 Registro e inicio de sesión del comprador
+app.include_router(comprador_router, prefix="/api/v1")
 
 
 def generar_openapi():

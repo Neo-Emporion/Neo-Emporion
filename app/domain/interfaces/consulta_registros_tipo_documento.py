@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────
 # DOMINIO — contrato para saber si hay registros con un tipo de documento (RN-50)
-# Los compradores (HU-07) y los vendedores (HU-08) son los que registran un
-# número de documento con un tipo; esos módulos aún no están construidos.
+# Los compradores (HU-07, ya conectado) y los vendedores (HU-08, pendiente) son los
+# que registran un número de documento con un tipo.
 # ─────────────────────────────────────────────────────────────
 
 from abc import ABC, abstractmethod

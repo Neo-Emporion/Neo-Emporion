@@ -21,7 +21,7 @@ class TipoDocumentoEnUso(ErrorDominio):
 
 
 class ErrorAccesoDatosTipoDocumento(ErrorDominio):
-    # TODO(pendiente): la HU no define el texto de falla de base de datos.
+    # Texto definido en HU-02, Caso 10.
     def __init__(self):
         super().__init__(
             "No fue posible procesar la solicitud de tipos de documento"

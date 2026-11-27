@@ -1,7 +1,7 @@
 import logging
 from functools import wraps
 
-from sqlalchemy import CheckConstraint, Enum, Integer, String, Text, func, select
+from sqlalchemy import CheckConstraint, Enum, Integer, String, Text, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Mapped, mapped_column, sessionmaker
 
@@ -85,25 +85,18 @@ class TipoDocumentoRepository:
     def listar(
         self,
         estado: FiltroEstadoTipoDocumento,
-        pagina: int,
-        tamano: int,
-    ) -> tuple[list[TipoDocumento], int]:
+    ) -> list[TipoDocumento]:
         filtros = []
         if estado != FiltroEstadoTipoDocumento.TODOS:
             filtros.append(TipoDocumentoTabla.estado == EstadoTipoDocumento(estado.value))
 
         with self._sesiones() as session:
-            total = session.scalar(
-                select(func.count()).select_from(TipoDocumentoTabla).where(*filtros)
-            )
             filas = session.scalars(
                 select(TipoDocumentoTabla)
                 .where(*filtros)
                 .order_by(TipoDocumentoTabla.id)
-                .offset((pagina - 1) * tamano)
-                .limit(tamano)
             ).all()
-            return [_a_entidad(fila) for fila in filas], total
+            return [_a_entidad(fila) for fila in filas]
 
     @_manejar_errores_bd
     def crear(

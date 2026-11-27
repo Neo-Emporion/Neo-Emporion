@@ -1,11 +1,13 @@
 import pytest
 
 from app.domain.exceptions.tipo_documento import (
+    CodigoTipoDocumentoDuplicado,
     TipoDocumentoEnUso,
 )
 from app.domain.models.tipo_documento import (
     EstadoTipoDocumento,
     TipoDocumento,
+    TipoDocumentoCreate,
 )
 
 
@@ -59,3 +61,34 @@ def test_desactivar_tipo_en_uso_no_cambia_estado():
         tipo.desactivar(esta_en_uso=True)
 
     assert tipo.estado == EstadoTipoDocumento.ACTIVO
+
+
+# ── Unicidad del código (RN-48) ───────────────────────────────
+
+def test_rn48_codigo_duplicado(servicio_tipo_documento):
+    servicio_tipo_documento.registrar(
+        TipoDocumentoCreate(codigo="NIT", nombre="Número de Identificación Tributaria")
+    )
+
+    with pytest.raises(CodigoTipoDocumentoDuplicado):
+        servicio_tipo_documento.registrar(
+            TipoDocumentoCreate(codigo="NIT", nombre="Otro nombre")
+        )
+
+
+def test_rn48_codigos_distintos_si_se_permiten(servicio_tipo_documento):
+    cc = servicio_tipo_documento.registrar(
+        TipoDocumentoCreate(codigo="CC", nombre="Cédula de ciudadanía")
+    )
+    nit = servicio_tipo_documento.registrar(
+        TipoDocumentoCreate(codigo="NIT", nombre="Número de Identificación Tributaria")
+    )
+
+    assert cc.id != nit.id
+
+
+def test_rn48_la_base_tambien_rechaza_codigo_repetido(repo_tipo_documento):
+    repo_tipo_documento.crear(codigo="CC", nombre="Cédula de ciudadanía", descripcion=None)
+
+    with pytest.raises(CodigoTipoDocumentoDuplicado):
+        repo_tipo_documento.crear(codigo="CC", nombre="Otro nombre", descripcion=None)

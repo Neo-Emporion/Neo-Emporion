@@ -207,3 +207,51 @@ def client_formato(repo_formatos, tipos_formato, registros_tipo_documento, monke
     monkeypatch.setattr(formato_router, "service",
                         FormatoService(repo_formatos, tipos_formato, registros_tipo_documento))
     return TestClient(app)
+
+
+# ── HU-07 Registrar e iniciar sesión como comprador ───────────
+from app.api.routers import comprador_router  # noqa: E402
+from app.core import autenticacion  # noqa: E402
+from app.repositories.comprador_repository import CompradorRepository  # noqa: E402
+from app.services.comprador_service import CompradorService  # noqa: E402
+from app.services.consulta_tipos_documento import ConsultaTiposDocumento  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def cifrado_rapido(monkeypatch):
+    """Cifrar con 600 000 vueltas tarda casi medio segundo. En las pruebas se usan
+    menos vueltas para que la suite sea rápida (el algoritmo es el mismo)."""
+    monkeypatch.setattr(autenticacion, "ITERACIONES", 1_000)
+
+
+@pytest.fixture
+def sesiones_comprador():
+    """Una base SQLite en memoria nueva, compartida por tipos, formatos y compradores."""
+    motor = crear_engine("sqlite:///:memory:")
+    crear_tablas(motor)
+    yield sessionmaker(bind=motor, expire_on_commit=False)
+    motor.dispose()
+
+
+@pytest.fixture
+def tipos_comprador(sesiones_comprador):
+    """Repositorio de tipos de documento (HU-02) sobre la base de la prueba."""
+    return TipoDocumentoRepository(sesiones_comprador)
+
+
+@pytest.fixture
+def formatos_comprador(sesiones_comprador):
+    """Repositorio de formatos (HU-05) sobre la base de la prueba."""
+    return FormatoRepository(sesiones_comprador)
+
+
+@pytest.fixture
+def repo_compradores(sesiones_comprador):
+    return CompradorRepository(sesiones_comprador)
+
+
+@pytest.fixture
+def client_comprador(repo_compradores, tipos_comprador, formatos_comprador, monkeypatch):
+    consulta = ConsultaTiposDocumento(tipos_comprador, formatos_comprador)
+    monkeypatch.setattr(comprador_router, "service", CompradorService(repo_compradores, consulta))
+    return TestClient(app)

@@ -156,3 +156,54 @@ def crear_valor(client, categoria, codigo, nombre):
     """Registra un valor paramétrico como administrador y devuelve la respuesta."""
     return client.post(URL_VALORES, json={"categoria": categoria, "codigo": codigo,
                                           "nombre": nombre}, headers=ADMIN)
+
+
+# ── HU-05 Formato de validación de tipo de documento ──────────
+from app.api.routers import formato_router  # noqa: E402
+from app.domain.interfaces.consulta_registros_tipo_documento import (  # noqa: E402
+    IConsultaRegistrosTipoDocumento,
+)
+from app.repositories.formato_repository import FormatoRepository  # noqa: E402
+from app.services.formato_service import FormatoService  # noqa: E402
+
+
+class RegistrosTipoDocumentoSimulados(IConsultaRegistrosTipoDocumento):
+    """Reemplaza la consulta real (compradores HU-07 y vendedores HU-08 aún no existen)."""
+
+    def __init__(self):
+        self.tipos_con_registros: set[int] = set()
+
+    def tiene_registros_asociados(self, tipo_documento_id: int) -> bool:
+        return tipo_documento_id in self.tipos_con_registros
+
+
+@pytest.fixture
+def sesiones_formato():
+    """Una base SQLite en memoria nueva, compartida por tipos de documento y formatos."""
+    motor = crear_engine("sqlite:///:memory:")
+    crear_tablas(motor)
+    yield sessionmaker(bind=motor, expire_on_commit=False)
+    motor.dispose()
+
+
+@pytest.fixture
+def tipos_formato(sesiones_formato):
+    """Repositorio de tipos de documento (HU-02) sobre la base de la prueba."""
+    return TipoDocumentoRepository(sesiones_formato)
+
+
+@pytest.fixture
+def repo_formatos(sesiones_formato):
+    return FormatoRepository(sesiones_formato)
+
+
+@pytest.fixture
+def registros_tipo_documento():
+    return RegistrosTipoDocumentoSimulados()
+
+
+@pytest.fixture
+def client_formato(repo_formatos, tipos_formato, registros_tipo_documento, monkeypatch):
+    monkeypatch.setattr(formato_router, "service",
+                        FormatoService(repo_formatos, tipos_formato, registros_tipo_documento))
+    return TestClient(app)

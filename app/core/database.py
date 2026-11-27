@@ -42,4 +42,5 @@ def crear_tablas(motor: Engine = engine) -> None:
     import app.repositories.tipo_documento_repository  # noqa: F401
     import app.repositories.valor_repository  # noqa: F401
     import app.repositories.formato_repository  # noqa: F401
+    import app.repositories.comprador_repository  # noqa: F401
     Base.metadata.create_all(bind=motor)

@@ -36,8 +36,6 @@ service = TipoDocumentoService(
     consulta_uso=consulta_uso_tipo_documento,
 )
 
-TAMANO_MAXIMO = 100
-
 CODIGOS_HTTP: dict[type[ErrorDominio], int] = {
     TipoDocumentoNoExiste: status.HTTP_404_NOT_FOUND,
     CodigoTipoDocumentoDuplicado: status.HTTP_409_CONFLICT,
@@ -169,7 +167,7 @@ def editar_tipo_documento(
     response_model=Respuesta[list[TipoDocumentoListadoItem]],
     summary="API-I08 · Consultar / listar tipos de documento",
     description=(
-        "FUN-03. Lista tipos de documento paginados. "
+        "FUN-03. Lista los tipos de documento (arreglo, sin paginación). "
         "Por defecto devuelve solo tipos activos."
     ),
     responses={
@@ -190,7 +188,7 @@ def editar_tipo_documento(
                     },
             ],
         )}}},
-        400: ejemplo_error("Filtro o paginación inválidos", "El campo estado no es válido"),
+        400: ejemplo_error("Filtro inválido", "El campo estado no es válido"),
         503: E503,
     },
 )
@@ -199,13 +197,11 @@ def listar_tipos_documento(
         FiltroEstadoTipoDocumento.ACTIVO,
         description="ACTIVO (por defecto), INACTIVO o TODOS",
     ),
-    pagina: int = Query(1, ge=1),
-    tamano: int = Query(20, ge=1, le=TAMANO_MAXIMO),
 ):
     try:
         return exito(
             "Consulta de tipos de documento exitosa",
-            service.listar(estado, pagina, tamano),
+            service.listar(estado),
         )
     except ErrorDominio as error:
         raise _a_http(error) from error
@@ -218,8 +214,8 @@ def listar_tipos_documento(
     description=(
         "FUN-05. Marca el tipo como INACTIVO sin eliminarlo. "
         "Solo Administrador.\n\n"
-        "RN-48: no se permite desactivar si existen compradores o vendedores "
-        "activos asociados."
+        "No se permite desactivar si existen compradores o vendedores "
+        "activos registrados con ese tipo."
     ),
     responses={
         200: {"content": {"application/json": {"example": exito(

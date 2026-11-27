@@ -52,10 +52,8 @@ class TipoDocumentoService:
     def listar(
         self,
         estado: FiltroEstadoTipoDocumento,
-        pagina: int,
-        tamano: int,
     ) -> list[TipoDocumentoListadoItem]:
-        tipos, total = self.repo.listar(estado, pagina, tamano)
+        tipos = self.repo.listar(estado)
         return [
             TipoDocumentoListadoItem(**tipo.to_response())
             for tipo in tipos

@@ -315,3 +315,27 @@ def test_codigo_invalido(
     )
 
     assert respuesta.status_code == 400
+
+
+def test_listado_sin_resultados(client_tipo_documento):
+    respuesta = client_tipo_documento.get(RUTA)
+
+    assert respuesta.status_code == 200
+    assert respuesta.json() == {
+        "mensaje": "Consulta de tipos de documento exitosa",
+        "data": [],
+        "success": True,
+    }
+
+
+def test_listado_devuelve_todos_los_tipos(
+    client_tipo_documento,
+    servicio_tipo_documento,
+):
+    for numero in range(25):
+        registrar(servicio_tipo_documento, f"T{numero:02d}", f"Tipo {numero}")
+
+    respuesta = client_tipo_documento.get(RUTA)
+
+    assert respuesta.status_code == 200
+    assert len(respuesta.json()["data"]) == 25

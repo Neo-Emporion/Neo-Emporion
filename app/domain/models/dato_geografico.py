@@ -10,7 +10,12 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.exceptions.ubicacion import DesactivacionNoPermitida, JerarquiaInvalida
+from app.domain.exceptions.ubicacion import (
+    DesactivacionNoPermitida,
+    JerarquiaInvalida,
+    PadreNoPublicado,
+    UbicacionInactiva,
+)
 
 
 # ── Valores permitidos ────────────────────────────────────────
@@ -122,6 +127,16 @@ class UbicacionDesactivada(BaseModel):
     estado: EstadoUbicacion
 
 
+class UbicacionPublicada(BaseModel):
+    """Respuesta de la publicación (HU-04): solo los campos del contrato."""
+    id: int
+    nombre: str
+    estado: EstadoUbicacion
+    publicada: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ── Modelo interno del dominio (la "entidad real") ────────────
 class DatoGeografico:
     def __init__(self, id: int, tipo: TipoUbicacion, nombre: str, codigo: str,
@@ -172,6 +187,24 @@ class DatoGeografico:
         if tiene_direcciones_activas or tiene_hijas_activas:
             raise DesactivacionNoPermitida()
         self.estado = EstadoUbicacion.INACTIVO
+
+    # REGLA DE NEGOCIO HU-04: publicar para que otros módulos la consuman.
+    # - Idempotente: si ya está publicada no cambia nada.
+    # - Solo se publica una ubicación ACTIVO.
+    # - Si la jerarquía exige padre, ese padre debe estar publicado.
+    # `padre` es la ubicación encontrada con `padre_id` (None si no existe).
+    def publicar(self, padre: Optional["DatoGeografico"]) -> None:
+        # TODO(pendiente): la HU no dice qué prima si la ubicación ya está publicada
+        # pero fue desactivada. Se mantiene la idempotencia: responde 200 sin cambios.
+        if self.publicada:
+            return
+        if self.estado != EstadoUbicacion.ACTIVO:
+            raise UbicacionInactiva()
+        if PADRE_REQUERIDO[self.tipo] is not None and (padre is None or not padre.publicada):
+            raise PadreNoPublicado()
+        # TODO(pendiente): la HU solo exige que el padre esté publicado; no exige
+        # que el padre siga ACTIVO, así que no se valida su estado.
+        self.publicada = True
 
     def to_response(self) -> dict:
         return {

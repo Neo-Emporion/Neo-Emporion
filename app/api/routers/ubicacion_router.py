@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# CAPA API — HU-01 Gestionar catálogo geográfico
+# CAPA API — HU-01 Gestionar catálogo geográfico / HU-04 Publicar dato geográfico
 # MOD-01 Parametrización / SUB-02 Catálogos Geográficos
 # Solo recibe peticiones y llama al servicio.
 # Aquí NO hay lógica de negocio.
@@ -10,13 +10,16 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from app.api.dependencies.seguridad import MENSAJE_401, MENSAJE_403, requiere_administrador
-from app.api.schemas.respuesta import Respuesta, ejemplo_error, exito
+from app.api.schemas.respuesta import Respuesta, RespuestaError, error, ejemplo_error, exito
 from app.domain.exceptions.base import ErrorDominio
 from app.domain.exceptions.ubicacion import (
     DesactivacionNoPermitida,
     ErrorAccesoDatos,
+    ErrorPublicacionDatos,
     JerarquiaInvalida,
+    PadreNoPublicado,
     UbicacionDuplicada,
+    UbicacionInactiva,
     UbicacionNoEncontrada,
 )
 from app.domain.models.dato_geografico import (
@@ -25,6 +28,7 @@ from app.domain.models.dato_geografico import (
     UbicacionCreate,
     UbicacionDesactivada,
     UbicacionListado,
+    UbicacionPublicada,
     UbicacionResponse,
     UbicacionUpdate,
 )
@@ -36,7 +40,7 @@ from app.services.ubicacion_service import UbicacionService
 # main.py lo registra bajo /api/v1.
 router = APIRouter(
     prefix="/parametrizacion/ubicaciones",
-    tags=["MOD-01 Parametrización · Catálogo geográfico (HU-01)"],
+    tags=["MOD-01 Parametrización · Catálogo geográfico (HU-01, HU-04)"],
 )
 
 # Instanciar el servicio con inyección del repositorio y de la consulta de direcciones
@@ -52,7 +56,10 @@ CODIGOS_HTTP: dict[type[ErrorDominio], int] = {
     UbicacionNoEncontrada: status.HTTP_404_NOT_FOUND,
     UbicacionDuplicada: status.HTTP_409_CONFLICT,
     DesactivacionNoPermitida: status.HTTP_409_CONFLICT,
+    UbicacionInactiva: status.HTTP_409_CONFLICT,
+    PadreNoPublicado: status.HTTP_409_CONFLICT,
     ErrorAccesoDatos: status.HTTP_503_SERVICE_UNAVAILABLE,
+    ErrorPublicacionDatos: status.HTTP_503_SERVICE_UNAVAILABLE,
 }
 
 
@@ -77,10 +84,23 @@ E409_DUPLICADO = ejemplo_error(
 E409_RN47 = ejemplo_error(
     "RN-47: tiene direcciones activas o ubicaciones hijas activas",
     "No es posible desactivar la ubicación porque tiene direcciones activas asociadas")
+E409_PUBLICACION = {
+    "model": RespuestaError,
+    "description": "Ubicación inactiva o ubicación padre sin publicar",
+    "content": {"application/json": {"examples": {
+        "inactiva": error("No es posible publicar una ubicación inactiva"),
+        "padre_no_publicado": error(
+            "No es posible publicar la ubicación porque su ubicación padre no está publicada"),
+    }}},
+}
 E503 = ejemplo_error("Falla de base de datos",
                      "No fue posible procesar la solicitud de ubicaciones")
+E503_PUBLICACION = ejemplo_error("Falla de base de datos",
+                                 "No fue posible publicar la ubicación")
 EJEMPLO_UBICACION = {"id": 1203, "tipo": "CIUDAD", "nombre": "Bucaramanga", "codigo": "68001",
                      "padre_id": 68, "estado": "ACTIVO", "publicada": False}
+EJEMPLO_PUBLICACION = {"id": 1203, "nombre": "Bucaramanga", "estado": "ACTIVO",
+                       "publicada": True}
 
 
 # ── POST /api/v1/parametrizacion/ubicaciones (API-G01) ────────
@@ -145,7 +165,10 @@ def editar_ubicacion(datos: UbicacionUpdate,
     description=(
         "FUN-08. Lista ubicaciones paginadas con su jerarquía (`padre_id`).\n\n"
         "Filtros opcionales: `tipo`, `padre_id` y `estado`. Por defecto solo se listan las "
-        "`ACTIVO`; las desactivadas aparecen con `estado=INACTIVO` o `estado=TODOS`."
+        "`ACTIVO`; las desactivadas aparecen con `estado=INACTIVO` o `estado=TODOS`.\n\n"
+        "Vista de consumo (HU-04): con `solo_publicadas=true` la API-I09 devuelve "
+        "únicamente ubicaciones `ACTIVO` y `publicada = true`, para los módulos que "
+        "consumen el catálogo geográfico."
     ),
     responses={
         200: {"content": {"application/json": {"example": exito(
@@ -166,12 +189,17 @@ def listar_ubicaciones(
     # Máximo 100 por decisión del dueño del proyecto (la HU no fija un tope).
     tamano: int = Query(20, ge=1, le=TAMANO_MAXIMO,
                         description=f"Elementos por página (máximo {TAMANO_MAXIMO})"),
+    solo_publicadas: bool = Query(
+        False,
+        description="Vista de consumo (API-I09, HU-04): si es true, solo devuelve "
+                    "ubicaciones ACTIVO y publicadas"),
 ):
     # TODO(pendiente): la HU-01 no indica qué roles pueden consultar el listado
     # (dice "el usuario"). Por ahora no exige autenticación.
     try:
         return exito("Consulta de ubicaciones exitosa",
-                     service.listar(tipo, padre_id, estado, pagina, tamano))
+                     service.listar(tipo, padre_id, estado, pagina, tamano,
+                                    solo_publicadas))
     except ErrorDominio as e:
         raise _a_http(e) from e
 
@@ -197,5 +225,38 @@ def desactivar_ubicacion(id: int = Path(..., description="Identificador de la ub
                          _rol: str = Depends(requiere_administrador)):
     try:
         return exito("Ubicación desactivada exitosamente", service.desactivar(id))
+    except ErrorDominio as e:
+        raise _a_http(e) from e
+
+
+# ── PATCH /api/v1/parametrizacion/ubicaciones/{id}/publicar (API-G04) ──
+@router.patch(
+    "/{id}/publicar",
+    response_model=Respuesta[UbicacionPublicada],
+    summary="API-G04 · Publicar ubicación",
+    description=(
+        "FUN-10. Marca la ubicación como publicada (`publicada = true`) para que los "
+        "módulos consumidores la vean por la API-I09. Solo Administrador.\n\n"
+        "Validaciones:\n"
+        "- La ubicación debe existir (`404` si no existe).\n"
+        "- La ubicación debe estar `ACTIVO` (`409` si está inactiva).\n"
+        "- Si la jerarquía exige padre (`DEPARTAMENTO` -> `PAIS`, `CIUDAD` -> "
+        "`DEPARTAMENTO`), ese padre debe estar publicado (`409` si no lo está).\n"
+        "- Es idempotente: publicar una ubicación ya publicada responde `200` sin cambios.\n\n"
+        "A partir de la publicación, `GET /api/v1/parametrizacion/ubicaciones?"
+        "solo_publicadas=true` (API-I09) la incluye para los demás módulos."
+    ),
+    responses={
+        200: {"content": {"application/json": {"example": exito(
+            "Ubicación publicada exitosamente", EJEMPLO_PUBLICACION)}}},
+        401: E401, 403: E403, 404: E404,
+        409: E409_PUBLICACION,
+        503: E503_PUBLICACION,
+    },
+)
+def publicar_ubicacion(id: int = Path(..., description="Identificador de la ubicación"),
+                       _rol: str = Depends(requiere_administrador)):
+    try:
+        return exito("Ubicación publicada exitosamente", service.publicar(id))
     except ErrorDominio as e:
         raise _a_http(e) from e

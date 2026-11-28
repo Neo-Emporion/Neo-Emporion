@@ -1,12 +1,17 @@
 # ─────────────────────────────────────────────────────────────
-# CAPA SERVICIO — HU-01 Gestionar catálogo geográfico
-# Orquesta dominio + repositorio: valida jerarquía, duplicidad y RN-47,
+# CAPA SERVICIO — HU-01 Gestionar catálogo geográfico / HU-04 Publicar dato geográfico
+# Orquesta dominio + repositorio: valida jerarquía, duplicidad, RN-47 y publicación,
 # y prepara la respuesta. No importa nada de FastAPI aquí.
 # ─────────────────────────────────────────────────────────────
 
 from typing import Optional
 
-from app.domain.exceptions.ubicacion import UbicacionDuplicada, UbicacionNoEncontrada
+from app.domain.exceptions.ubicacion import (
+    ErrorAccesoDatos,
+    ErrorPublicacionDatos,
+    UbicacionDuplicada,
+    UbicacionNoEncontrada,
+)
 from app.domain.interfaces.consulta_direcciones import IConsultaDirecciones
 from app.domain.models.dato_geografico import (
     DatoGeografico,
@@ -17,6 +22,7 @@ from app.domain.models.dato_geografico import (
     UbicacionDesactivada,
     UbicacionListado,
     UbicacionListadoItem,
+    UbicacionPublicada,
     UbicacionResponse,
     UbicacionUpdate,
 )
@@ -54,10 +60,18 @@ class UbicacionService:
 
     # ── FUN-08 Consultar / listar catálogo (API-I09) ──────────
     def listar(self, tipo: Optional[TipoUbicacion], padre_id: Optional[int],
-               estado: FiltroEstado, pagina: int, tamano: int) -> UbicacionListado:
-        # TODOS = sin filtro de estado
+               estado: FiltroEstado, pagina: int, tamano: int,
+               solo_publicadas: bool = False) -> UbicacionListado:
+        # TODOS = sin filtro de estado.
+        # Vista de consumo (HU-04): solo ACTIVO y publicada = true, sin importar
+        # el filtro de estado que envíe el consumidor.
+        # TODO(pendiente): la HU-04 no define cómo distinguir la vista de consumo
+        # de la administrativa en la misma API-I09. Se agrega `solo_publicadas`.
         filtro = None if estado == FiltroEstado.TODOS else EstadoUbicacion(estado.value)
-        elementos, total = self.repo.listar(tipo, padre_id, filtro, pagina, tamano)
+        if solo_publicadas:
+            filtro = EstadoUbicacion.ACTIVO
+        elementos, total = self.repo.listar(tipo, padre_id, filtro, pagina, tamano,
+                                            solo_publicadas=solo_publicadas)
         return UbicacionListado(
             pagina=pagina,
             tamano=tamano,
@@ -75,6 +89,19 @@ class UbicacionService:
         )
         u = self.repo.guardar(u)
         return UbicacionDesactivada(id=u.id, estado=u.estado)
+
+    # ── FUN-10 Publicar dato geográfico (API-G04) ─────────────
+    def publicar(self, id: int) -> UbicacionPublicada:
+        try:
+            u = self._obtener(id)
+            # La regla (activa, padre publicado e idempotencia) vive en la entidad.
+            u.publicar(self._buscar_padre(u.padre_id))
+            u = self.repo.guardar(u)
+        except ErrorAccesoDatos as e:
+            # La HU-04 define su propio texto para la falla de base de datos.
+            raise ErrorPublicacionDatos() from e
+        return UbicacionPublicada(id=u.id, nombre=u.nombre, estado=u.estado,
+                                  publicada=u.publicada)
 
     # ── Apoyo interno ─────────────────────────────────────────
     def _obtener(self, id: int) -> DatoGeografico:

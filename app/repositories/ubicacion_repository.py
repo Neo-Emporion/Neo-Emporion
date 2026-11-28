@@ -120,10 +120,11 @@ class UbicacionRepository:
 
     @_manejar_errores_bd
     def listar(self, tipo: Optional[TipoUbicacion], padre_id: Optional[int],
-               estado: Optional[EstadoUbicacion], pagina: int,
-               tamano: int) -> tuple[list[DatoGeografico], int]:
+               estado: Optional[EstadoUbicacion], pagina: int, tamano: int,
+               solo_publicadas: bool = False) -> tuple[list[DatoGeografico], int]:
         """Filtra y pagina. `estado=None` significa todos los estados.
-        Devuelve (elementos de la página, total de coincidencias)."""
+        `solo_publicadas=True` agrega el filtro de publicación (vista de consumo
+        de la API-I09, HU-04). Devuelve (elementos de la página, total)."""
         filtros = []
         if tipo is not None:
             filtros.append(UbicacionTabla.tipo == tipo)
@@ -131,6 +132,8 @@ class UbicacionRepository:
             filtros.append(UbicacionTabla.padre_id == padre_id)
         if estado is not None:
             filtros.append(UbicacionTabla.estado == estado)
+        if solo_publicadas:
+            filtros.append(UbicacionTabla.publicada.is_(True))
 
         with self._sesiones() as s:
             total = s.scalar(select(func.count()).select_from(UbicacionTabla).where(*filtros))

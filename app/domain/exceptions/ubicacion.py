@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# DOMINIO — errores de negocio de HU-01 (catálogo geográfico)
+# DOMINIO — errores de negocio de HU-01 y HU-04 (catálogo geográfico)
 # El servicio los lanza y el router los convierte en HTTPException.
 # No importa nada de FastAPI ni de base de datos aquí.
 # ─────────────────────────────────────────────────────────────
@@ -46,3 +46,28 @@ class ErrorAccesoDatos(ErrorDominio):
 
     def __init__(self):
         super().__init__("No fue posible procesar la solicitud de ubicaciones")
+
+
+# ── HU-04 Publicar dato geográfico ────────────────────────────
+
+class UbicacionInactiva(ErrorDominio):
+    """Solo se publican ubicaciones ACTIVO (HTTP 409)."""
+
+    def __init__(self):
+        super().__init__("No es posible publicar una ubicación inactiva")
+
+
+class PadreNoPublicado(ErrorDominio):
+    """La ubicación padre requerida por la jerarquía aún no está publicada (HTTP 409)."""
+
+    def __init__(self):
+        super().__init__(
+            "No es posible publicar la ubicación porque su ubicación padre no está publicada"
+        )
+
+
+class ErrorPublicacionDatos(ErrorDominio):
+    """Falla de base de datos al publicar una ubicación (HTTP 503, texto de HU-04)."""
+
+    def __init__(self):
+        super().__init__("No fue posible publicar la ubicación")
